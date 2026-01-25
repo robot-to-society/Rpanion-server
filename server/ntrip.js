@@ -126,7 +126,7 @@ class NtripClientWrapper extends events.EventEmitter {
         const ggaMessage = this.generateGGAMessage()
         this.client.write(ggaMessage)
       }
-    }, 60000)
+    }, this.options.ggaInterval * 1000)
   }
 
   stopSendingGGA() {
@@ -242,7 +242,8 @@ class ntrip {
       // the interval of send nmea, unit is millisecond
       interval: 2000,
       active: false,
-      useTls: false
+      useTls: false,
+      ggaInterval: 60
     }
 
     // status. 0=not active, 1=waiting for FC, 2=waiting for GPS lock, 3=waiting for NTRIP server, 4=getting packets
@@ -267,6 +268,7 @@ class ntrip {
     this.options.password = this.settings.value('ntrip.password', '')
     this.options.active = this.settings.value('ntrip.active', false)
     this.options.useTls = this.settings.value('ntrip.useTls', false)
+    this.options.ggaInterval = this.settings.value('ntrip.ggaInterval', 60)
 
     this.client = null
     this.startStopNTRIP()
@@ -280,7 +282,8 @@ class ntrip {
       this.options.username,
       this.options.password,
       this.options.active,
-      this.options.useTls)
+      this.options.useTls,
+      this.options.ggaInterval)
   }
 
   startStopNTRIP () {
@@ -343,7 +346,7 @@ class ntrip {
     }
   }
 
-  setSettings (host, port, mount, username, password, active, useTls) {
+  setSettings (host, port, mount, username, password, active, useTls, ggaInterval) {
     // save new settings
     this.options.host = host
     this.options.port = port
@@ -352,6 +355,7 @@ class ntrip {
     this.options.password = password
     this.options.active = active
     this.options.useTls = useTls
+    this.options.ggaInterval = ggaInterval
 
     // and save
     try {
@@ -362,6 +366,7 @@ class ntrip {
       this.settings.setValue('ntrip.password', this.options.password)
       this.settings.setValue('ntrip.active', this.options.active)
       this.settings.setValue('ntrip.useTls', this.options.useTls)
+      this.settings.setValue('ntrip.ggaInterval', this.options.ggaInterval)
       console.log('Saved NTRIP settings')
     } catch (e) {
       console.log(e)
