@@ -45,4 +45,42 @@ describe('NTRIP Functions', function () {
     assert.deepEqual(msgparts, ['$GPGGA', '5418.000000', 'S', '15220.700000', 'E', '1', '00', '0.000', '0', 'M', '0', 'M', '1.000'])
 
   })
+
+  it('#ntripGGAInterval()', function () {
+    // Test default GGA interval is 60 seconds
+    settings.clear()
+    const ntripClient = new Ntrip(settings)
+    assert.equal(ntripClient.options.ggaInterval, 60)
+  })
+
+  it('#ntripGGAIntervalCustom()', function () {
+    // Test custom GGA interval persistence
+    settings.clear()
+    const ntripClient = new Ntrip(settings)
+    ntripClient.setSettings('host', 2101, 'mount', 'user', 'pass', false, false, 30)
+    assert.equal(ntripClient.options.ggaInterval, 30)
+
+    // Verify it was saved to settings
+    assert.equal(settings.value('ntrip.ggaInterval'), 30)
+  })
+
+  it('#ntripGGAIntervalBoundaries()', function () {
+    // Test minimum boundary (1 second)
+    settings.clear()
+    const ntripClient = new Ntrip(settings)
+    ntripClient.setSettings('host', 2101, 'mount', 'user', 'pass', false, false, 1)
+    assert.equal(ntripClient.options.ggaInterval, 1)
+
+    // Test maximum boundary (60 seconds)
+    ntripClient.setSettings('host', 2101, 'mount', 'user', 'pass', false, false, 60)
+    assert.equal(ntripClient.options.ggaInterval, 60)
+  })
+
+  it('#ntripGGAIntervalBackwardCompatibility()', function () {
+    // Test backward compatibility when ggaInterval is missing from settings
+    settings.clear()
+    // Don't set ggaInterval in settings - it should default to 60
+    const ntripClient = new Ntrip(settings)
+    assert.equal(ntripClient.options.ggaInterval, 60)
+  })
 })

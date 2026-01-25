@@ -19,6 +19,7 @@ class NTRIPPage extends basePage {
       active: false,
       showPW: false,
       useTLS: false,
+      ggaInterval: 60,
       NTRIPStatus: this.props.NTRIPStatus
     }
 
@@ -70,6 +71,7 @@ class NTRIPPage extends basePage {
         username: JSON.stringify(this.state.username),
         password: JSON.stringify(this.state.password),
         useTLS: this.state.useTLS,
+        ggaInterval: Number(this.state.ggaInterval),
         active: !this.state.active
       })
     }).then(response => response.json()).then(state => { this.setState(state) });
@@ -116,6 +118,13 @@ class NTRIPPage extends basePage {
             <div className="col-sm-10">
               <input type={this.state.showPW === true ? "text" : "password"} className="form-control" name="password" disabled={this.state.active === true} onChange={this.changeHandler} value={this.state.password} />
               <input name="showpassword" type="checkbox" checked={this.state.showPW} onChange={this.togglePasswordVisible} /><label>Show Password</label>
+            </div>
+          </div>
+
+          <div className="form-group row" style={{ marginBottom: '5px' }}>
+            <label className="col-sm-2 col-form-label">GGA Interval (sec)</label>
+            <div className="col-sm-10">
+              <input type="number" min="1" max="60" step="1" className="form-control" name="ggaInterval" disabled={this.state.active === true} onChange={this.changeHandler} value={this.state.ggaInterval} />
             </div>
           </div>
 

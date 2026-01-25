@@ -14,6 +14,7 @@
  - Video: Fix cameras not being enabled on boot
  - VPN: Fix Wireguard and Zerotier permissions
  - Logging: Use purpose-built dflogger instead of mavlink-router for logging
+ - NTRIP: Add configurable GGA transmission interval (1-60 seconds, default 60)
 
 #### [v0.11.4](https://github.com/stephendade/Rpanion-server/compare/v0.11.0...v0.11.4)
  - Migrate to using debian packages for release
