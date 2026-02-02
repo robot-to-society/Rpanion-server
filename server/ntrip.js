@@ -168,6 +168,11 @@ class NtripClientWrapper extends events.EventEmitter {
     }
 
     const connectCallback = (client) => {
+      let httpHeaderReceived = false
+      let responseBuffer = Buffer.alloc(0)
+      let chunkedEncoding = false
+      let chunkBuffer = Buffer.alloc(0)
+
       client.on('error', (err) => {
         this.emit('error', err)
         this.status = toString(err)
@@ -182,31 +187,122 @@ class NtripClientWrapper extends events.EventEmitter {
       for (const key in headers) {
         customHeader += `${key}: ${headers[key]}\r\n`
       }
-      const data = `GET /${mountpoint} HTTP/1.1\r\n${customHeader}\n\r\n`
+      const data = `GET /${mountpoint} HTTP/1.1\r\n${customHeader}\r\n`
       client.write(data)
 
       client.on('data', (data) => {
-        // print data as ascii
-        let header_lines = data.toString().split("\r\n")
-        for (let line of header_lines) {
-          // check for 401 and 404 errors
-          if (line.includes('401 Unauthorized')) {
-            this.emit('error', '401 Unauthorized')
-            this.stopSendingGGA()
-            this.status = "Incorrect credentials"
-            return
-          } else if (line.includes('404 Not Found')) {
-            this.emit('error', '404 Not Found')
-            this.stopSendingGGA()
-            this.status = "Mount point not found"
-            return
+        if (!httpHeaderReceived) {
+          // Accumulate data until we receive the full HTTP header
+          responseBuffer = Buffer.concat([responseBuffer, data])
+          const responseStr = responseBuffer.toString()
+          const headerEndIndex = responseStr.indexOf('\r\n\r\n')
+
+          if (headerEndIndex !== -1) {
+            // HTTP header is complete
+            const headerPart = responseStr.substring(0, headerEndIndex)
+            const header_lines = headerPart.split('\r\n')
+
+            // Check HTTP status line
+            const statusLine = header_lines[0]
+            if (statusLine.includes('401 Unauthorized')) {
+              this.emit('error', '401 Unauthorized')
+              this.stopSendingGGA()
+              this.status = "Incorrect credentials"
+              return
+            } else if (statusLine.includes('404 Not Found')) {
+              this.emit('error', '404 Not Found')
+              this.stopSendingGGA()
+              this.status = "Mount point not found"
+              return
+            } else if (!statusLine.includes('200 OK') && !statusLine.includes('200')) {
+              this.emit('error', `Unexpected HTTP response: ${statusLine}`)
+              this.stopSendingGGA()
+              this.status = `HTTP error: ${statusLine}`
+              return
+            }
+
+            // Check for chunked transfer encoding
+            for (let line of header_lines) {
+              if (line.toLowerCase().includes('transfer-encoding') && line.toLowerCase().includes('chunked')) {
+                chunkedEncoding = true
+                break
+              }
+            }
+
+            httpHeaderReceived = true
+            this.status = "Online"
+
+            // Start sending GGA messages after receiving 200 OK
+            this.startSendingGGA()
+
+            // Extract and emit the body part (RTCM data after header)
+            const bodyStartIndex = headerEndIndex + 4 // Skip '\r\n\r\n'
+            const rtcmData = responseBuffer.slice(bodyStartIndex)
+
+            if (rtcmData.length > 0) {
+              if (chunkedEncoding) {
+                chunkBuffer = Buffer.concat([chunkBuffer, rtcmData])
+                this.processChunkedData()
+              } else {
+                this.emit('data', rtcmData)
+              }
+            }
+
+            // Clear the response buffer
+            responseBuffer = Buffer.alloc(0)
+          }
+        } else {
+          // HTTP header already received, process RTCM data
+          if (chunkedEncoding) {
+            chunkBuffer = Buffer.concat([chunkBuffer, data])
+            this.processChunkedData()
+          } else {
+            this.emit('data', data)
           }
         }
-        this.emit('data', data)
-        this.status = "Online"
       })
 
-      this.startSendingGGA()
+      this.processChunkedData = () => {
+        while (chunkBuffer.length > 0) {
+          const chunkStr = chunkBuffer.toString()
+          const crlfIndex = chunkStr.indexOf('\r\n')
+
+          if (crlfIndex === -1) {
+            // Not enough data to read chunk size
+            break
+          }
+
+          const chunkSizeStr = chunkStr.substring(0, crlfIndex)
+          const chunkSize = parseInt(chunkSizeStr, 16)
+
+          if (isNaN(chunkSize)) {
+            // Invalid chunk size, skip
+            chunkBuffer = chunkBuffer.slice(crlfIndex + 2)
+            continue
+          }
+
+          if (chunkSize === 0) {
+            // Last chunk
+            chunkBuffer = Buffer.alloc(0)
+            break
+          }
+
+          const chunkDataStart = crlfIndex + 2
+          const chunkDataEnd = chunkDataStart + chunkSize
+
+          if (chunkBuffer.length < chunkDataEnd + 2) {
+            // Not enough data for complete chunk
+            break
+          }
+
+          // Extract chunk data
+          const chunkData = chunkBuffer.slice(chunkDataStart, chunkDataEnd)
+          this.emit('data', chunkData)
+
+          // Move to next chunk (skip trailing \r\n)
+          chunkBuffer = chunkBuffer.slice(chunkDataEnd + 2)
+        }
+      }
     }
 
     if (useTls) {
