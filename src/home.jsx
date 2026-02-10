@@ -67,23 +67,12 @@ class Home extends basePage {
   }
 
   renderTitle () {
-    return 'System Status Overview'
+    return ''
   }
 
   renderContent () {
     return (
-      <div style={{ width: 650 }}>
-        <div className="mb-4">
-          <h5>Quick Links</h5>
-          <p>Use the navigation menu to configure system components:</p>
-          <ul>
-            <li><a href='https://github.com/stephendade/Rpanion-server'>Rpanion-server website</a></li>
-            <li><a href='https://www.docs.rpanion.com/software/rpanion-server'>Rpanion-server documentation</a></li>
-          </ul>
-        </div>
-
-        <p>Welcome to the Rpanion-server home page. Real-time system status is updated every second.</p>
-        
+      <div style={{ width: '100%', maxWidth: '1200px' }}>
         <Row className="mb-4">
           <Col md={6} className="mb-3">
             <Card>

@@ -50,34 +50,72 @@ export default function loginPage() {
   }
 
   return(
-    <div className="login-wrapper">
-      <h1>Please Log In</h1>
-      <form onSubmit={handleSubmit}>
-        <label>
-          <p>Username</p>
-          <input type="text" name="username" onChange={e => setUserName(e.target.value)}/>
-        </label>
-        <label>
-          <p>Password</p>
-          <input type="password" name="password" onChange={e => setPassword(e.target.value)}/>
-        </label>
-        <div>
-          <Button type="submit">Submit</Button>
+    <div className="login-container">
+      <div className="login-card">
+        <div className="login-header">
+          <i className="bi bi-shield-lock-fill login-icon"></i>
+          <h1 className="login-title">AUTHENTICATION REQUIRED</h1>
         </div>
-      </form>
+
+        <form onSubmit={handleSubmit} className="login-form">
+          <div className="form-group mb-4">
+            <label className="form-label">
+              <i className="bi bi-person-fill me-2"></i>
+              username
+            </label>
+            <input
+              type="text"
+              name="username"
+              className="form-control"
+              placeholder="enter your username"
+              onChange={e => setUserName(e.target.value)}
+              autoComplete="username"
+            />
+          </div>
+
+          <div className="form-group mb-4">
+            <label className="form-label">
+              <i className="bi bi-key-fill me-2"></i>
+              password
+            </label>
+            <input
+              type="password"
+              name="password"
+              className="form-control"
+              placeholder="enter your password"
+              onChange={e => setPassword(e.target.value)}
+              autoComplete="current-password"
+            />
+          </div>
+
+          <div className="login-actions">
+            <Button type="submit" variant="primary" className="w-100">
+              <i className="bi bi-box-arrow-in-right me-2"></i>
+              Login
+            </Button>
+          </div>
+        </form>
+      </div>
+
       <Modal show={errorMessage !== ''} onHide={handleCloseError}>
-          <Modal.Header closeButton>
-            <Modal.Title>Error</Modal.Title>
-          </Modal.Header>
+        <Modal.Header closeButton>
+          <Modal.Title>
+            <i className="bi bi-exclamation-triangle-fill me-2"></i>
+            Authentication Error
+          </Modal.Title>
+        </Modal.Header>
 
-          <Modal.Body>
-            <p>{errorMessage}</p>
-          </Modal.Body>
+        <Modal.Body>
+          <p className="mb-0">{errorMessage}</p>
+        </Modal.Body>
 
-          <Modal.Footer>
-            <Button variant="primary" onClick={handleCloseError}>OK</Button>
-          </Modal.Footer>
-        </Modal>
+        <Modal.Footer>
+          <Button variant="primary" onClick={handleCloseError}>
+            <i className="bi bi-check-circle me-2"></i>
+            OK
+          </Button>
+        </Modal.Footer>
+      </Modal>
     </div>
   )
 }

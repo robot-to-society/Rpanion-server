@@ -39,6 +39,10 @@ class mavManager {
 
     this.enableDSRequest = enableDSRequest
 
+    // Detected messages tracking for filtering UI
+    this.detectedMessages = {} // { msgid: { msgid, name, count } }
+    this.messageRegistry = this.buildMessageRegistry()
+
     // udp input
     this.udpStream = udp.createSocket('udp4')
     this.inudpPort = inudpPort
@@ -78,6 +82,11 @@ class mavManager {
 
     // what to do when we get a message
     this.mav.on('data', packet => {
+      const msgid = packet.header.msgid
+
+      // Track detected messages
+      this.trackDetectedMessage(msgid)
+
       const clazz = REGISTRY[packet.header.msgid]
       if (!clazz) {
         // bad message - can't process here any further
@@ -444,6 +453,39 @@ class mavManager {
     } else {
       return 0
     }
+  }
+
+  buildMessageRegistry () {
+    // Build a registry mapping message ID to message name using node-mavlink REGISTRY
+    const registry = {}
+
+    // Process all message classes in REGISTRY
+    for (const [msgid, clazz] of Object.entries(REGISTRY)) {
+      if (clazz && clazz.MSG_ID !== undefined && clazz.MSG_NAME) {
+        registry[clazz.MSG_ID] = clazz.MSG_NAME
+      }
+    }
+
+    return registry
+  }
+
+  trackDetectedMessage (msgid) {
+    // Track detected messages for filtering UI
+    const msgname = this.messageRegistry[msgid] || `UNKNOWN_${msgid}`
+
+    if (!this.detectedMessages[msgid]) {
+      this.detectedMessages[msgid] = {
+        msgid: msgid,
+        name: msgname,
+        count: 0
+      }
+    }
+    this.detectedMessages[msgid].count++
+  }
+
+  getDetectedMessages () {
+    // Return detected messages for UI
+    return this.detectedMessages
   }
 }
 

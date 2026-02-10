@@ -3,11 +3,14 @@ import PropTypes from 'prop-types';
 
 // Socket IO connection status
 function SocketIOFooter (props) {
-  return <div className="page-content-footer" style={{ textAlign: 'center', bottom: '5px', width: '70%' }}>{props.socketioStatus
-    ? <p>
-      Server Status: Connected
-    </p>
-    : <p>Server Status: Not Connected</p>}</div>
+  return (
+    <div className="socketio-footer">
+      <div className={`status-indicator ${props.socketioStatus ? 'connected' : 'error'}`}>
+        <i className={`bi ${props.socketioStatus ? 'bi-check-circle-fill' : 'bi-x-circle-fill'} me-2`}></i>
+        {props.socketioStatus ? 'REALTIME DATA STREAM ACTIVE' : 'REALTIME DATA STREAM OFFLINE'}
+      </div>
+    </div>
+  )
 }
 
 // PropTypes validation

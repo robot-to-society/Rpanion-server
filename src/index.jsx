@@ -4,6 +4,7 @@ import React from 'react'
 
 import 'bootstrap/dist/css/bootstrap.css'
 import 'startbootstrap-simple-sidebar/dist/css/styles.css'
+import './css/styles.css'
 
 import AppRouter from './AppRouter'
 import * as serviceWorker from './serviceWorker'

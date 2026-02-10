@@ -944,6 +944,47 @@ app.post('/api/FCReboot', authenticateToken, function () {
   fcManager.rebootFC()
 })
 
+// New unified endpoint for adding outputs (UDP/TCP, Client/Server)
+app.post('/api/addoutput', authenticateToken, function (req, res) {
+  const { protocol, mode, ip, port } = req.body
+
+  // Validate required fields
+  if (!protocol || !mode || !port) {
+    return res.status(400).json({ error: 'Missing required parameters: protocol, mode, port' })
+  }
+
+  // Validate protocol
+  if (!['udp', 'tcp'].includes(protocol)) {
+    return res.status(400).json({ error: 'Invalid protocol. Must be "udp" or "tcp"' })
+  }
+
+  // Validate mode
+  if (!['client', 'server'].includes(mode)) {
+    return res.status(400).json({ error: 'Invalid mode. Must be "client" or "server"' })
+  }
+
+  // Validate port
+  const portNum = parseInt(port, 10)
+  if (isNaN(portNum) || portNum < 1 || portNum > 65535) {
+    return res.status(400).json({ error: 'Invalid port number (must be 1-65535)' })
+  }
+
+  // Validate IP for client mode
+  if (mode === 'client' && !ip) {
+    return res.status(400).json({ error: 'IP address required for client mode' })
+  }
+
+  try {
+    const newOutput = fcManager.addOutput(protocol, mode, ip, portNum)
+    res.setHeader('Content-Type', 'application/json')
+    res.send(JSON.stringify({ UDPoutputs: newOutput }))
+  } catch (err) {
+    console.error('Error in /api/addoutput:', err)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// Legacy endpoint for backwards compatibility
 app.post('/api/addudpoutput', authenticateToken, [check('newoutputIP').isIP(), check('newoutputPort').isInt({ min: 1 })], function (req, res) {
   const errors = validationResult(req)
   if (!errors.isEmpty()) {
@@ -957,6 +998,26 @@ app.post('/api/addudpoutput', authenticateToken, [check('newoutputIP').isIP(), c
   res.send(JSON.stringify({ UDPoutputs: newOutput }))
 })
 
+// New unified endpoint for removing outputs
+app.post('/api/removeoutput', authenticateToken, function (req, res) {
+  const { protocol, mode, removeoutputIP, removeoutputPort } = req.body
+
+  const portNum = parseInt(removeoutputPort, 10)
+  if (isNaN(portNum) || portNum < 1 || portNum > 65535) {
+    return res.status(400).json({ error: 'Invalid port number' })
+  }
+
+  try {
+    const newOutput = fcManager.removeOutput(protocol || 'udp', mode || 'client', removeoutputIP, portNum)
+    res.setHeader('Content-Type', 'application/json')
+    res.send(JSON.stringify({ UDPoutputs: newOutput }))
+  } catch (err) {
+    console.error('Error in /api/removeoutput:', err)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// Legacy endpoint for backwards compatibility
 app.post('/api/removeudpoutput', authenticateToken, [check('removeoutputIP').isIP(), check('removeoutputPort').isInt({ min: 1 })], function (req, res) {
   const errors = validationResult(req)
   if (!errors.isEmpty()) {
@@ -968,6 +1029,75 @@ app.post('/api/removeudpoutput', authenticateToken, [check('removeoutputIP').isI
 
   res.setHeader('Content-Type', 'application/json')
   res.send(JSON.stringify({ UDPoutputs: newOutput }))
+})
+
+// New endpoint for updating router settings (Heartbeat, Datastream Request)
+app.post('/api/updateRouterSettings', authenticateToken, function (req, res) {
+  const { enableHeartbeat, enableDSRequest } = req.body
+
+  if (typeof enableHeartbeat !== 'boolean' || typeof enableDSRequest !== 'boolean') {
+    return res.status(400).json({ error: 'enableHeartbeat and enableDSRequest must be boolean values' })
+  }
+
+  try {
+    fcManager.updateRouterSettings(enableHeartbeat, enableDSRequest)
+    res.setHeader('Content-Type', 'application/json')
+    res.send(JSON.stringify({
+      enableHeartbeat: fcManager.enableHeartbeat,
+      enableDSRequest: fcManager.enableDSRequest
+    }))
+  } catch (err) {
+    console.error('Error in /api/updateRouterSettings:', err)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// Edge filter endpoints for MAVLink message filtering
+app.get('/api/getEdgeFilter', authenticateToken, (req, res) => {
+  const edgeId = req.query.edgeId
+  const settings = require('settings-store')
+  const edgeFilters = settings.value('EdgeFilters', {})
+  const filter = edgeFilters[edgeId] || { blockedMsgIds: [] }
+  res.setHeader('Content-Type', 'application/json')
+  res.send(JSON.stringify(filter))
+})
+
+app.post('/api/setEdgeFilter', authenticateToken, (req, res) => {
+  const { edgeId, blockedMsgIds, outputIP, outputPort, outputProtocol, outputMode } = req.body
+
+  if (!edgeId || !Array.isArray(blockedMsgIds)) {
+    return res.status(400).json({ error: 'Invalid parameters: edgeId and blockedMsgIds array required' })
+  }
+
+  try {
+    const settings = require('settings-store')
+    const edgeFilters = settings.value('EdgeFilters', {})
+
+    edgeFilters[edgeId] = {
+      edgeId,
+      sourceNodeId: 'hub-router',
+      targetNodeId: edgeId.replace('e-hub-', ''),
+      outputIP,
+      outputPort,
+      outputProtocol,
+      outputMode,
+      blockedMsgIds,
+      lastUpdated: new Date().toISOString()
+    }
+
+    settings.setValue('EdgeFilters', edgeFilters)
+
+    // Regenerate mavlink-router config and restart if active
+    if (fcManager.active) {
+      fcManager.restartWithFilterUpdate()
+    }
+
+    res.setHeader('Content-Type', 'application/json')
+    res.send(JSON.stringify({ success: true, filter: edgeFilters[edgeId] }))
+  } catch (err) {
+    console.error('Error in /api/setEdgeFilter:', err)
+    res.status(500).json({ error: err.message })
+  }
 })
 
 io.engine.use((req, res, next) => {
@@ -992,6 +1122,11 @@ io.on('connection', function () {
     io.sockets.emit('LogConversionStatus', logConversion.conStatusLogStr())
     io.sockets.emit('PPPStatus', pppConnectionManager.conStatusStr())
     io.sockets.emit('VideoStreamStatus', vManager.getStreamingStatus())
+
+    // Send detected MAVLink messages for filtering UI
+    if (fcManager.m) {
+      io.sockets.emit('DetectedMessages', fcManager.m.getDetectedMessages())
+    }
   }, 1000)
 })
 

@@ -160,25 +160,45 @@ class FCDetails {
     return ret
   }
 
-  addUDPOutput (newIP, newPort) {
-    // add a new udp output, if not already in
-    // check if this ip:port is already in the list
+  addOutput (protocol, mode, ip, port) {
+    // Add a new output (UDP/TCP, Client/Server)
+    // Check if this output already exists
     for (let i = 0, len = this.UDPoutputs.length; i < len; i++) {
-      if (this.UDPoutputs[i].IP === newIP && this.UDPoutputs[i].port === newPort) {
-        return this.getUDPOutputs()
+      const output = this.UDPoutputs[i]
+      const existingProtocol = output.protocol || 'udp'
+      const existingMode = output.mode || 'client'
+
+      if (existingProtocol === protocol && existingMode === mode) {
+        if (mode === 'server' && output.port === port) {
+          return this.getUDPOutputs()
+        }
+        if (mode === 'client' && output.IP === ip && output.port === port) {
+          return this.getUDPOutputs()
+        }
       }
     }
 
-    // check that it's not the internal 127.0.0.1:14540
-    if (newIP === '127.0.0.1' && newPort === 14540) {
+    // Check that it's not an internal endpoint
+    if (ip === '127.0.0.1' && (port === 14540 || port === 14541)) {
       return this.getUDPOutputs()
     }
 
-    // add it in
-    this.UDPoutputs.push({ IP: newIP, port: newPort })
-    console.log('Added UDP Output ' + newIP + ':' + newPort)
+    // Add the new output
+    const newOutput = {
+      protocol: protocol,
+      mode: mode,
+      port: port
+    }
 
-    // restart mavlink-router, if link active
+    // Only add IP for client mode
+    if (mode === 'client') {
+      newOutput.IP = ip
+    }
+
+    this.UDPoutputs.push(newOutput)
+    console.log(`Added ${protocol.toUpperCase()} ${mode} output: ${mode === 'client' ? ip + ':' : 'port '}${port}`)
+
+    // Restart mavlink-router if link is active
     if (this.m) {
       this.closeLink(() => {
         this.startLink((err) => {
@@ -189,7 +209,7 @@ class FCDetails {
       })
     }
 
-    // try to save. Will be invalid if running under test runner
+    // Save settings
     try {
       this.saveSerialSettings()
     } catch (e) {
@@ -199,22 +219,38 @@ class FCDetails {
     return this.getUDPOutputs()
   }
 
-  removeUDPOutput (remIP, remPort) {
-    // remove new udp output
+  addUDPOutput (newIP, newPort) {
+    // Legacy method - calls the new addOutput method
+    return this.addOutput('udp', 'client', newIP, newPort)
+  }
 
-    // check that it's not the internal 127.0.0.1:14540
-    if (remIP === '127.0.0.1' && remPort === 14540) {
+  removeOutput (protocol, mode, remIP, remPort) {
+    // Remove an output (UDP/TCP, Client/Server)
+    // Check that it's not an internal endpoint
+    if (remIP === '127.0.0.1' && (remPort === 14540 || remPort === 14541)) {
       return this.getUDPOutputs()
     }
 
-    // check if this ip:port is already in the list
+    // Find and remove the output
     for (let i = 0, len = this.UDPoutputs.length; i < len; i++) {
-      if (this.UDPoutputs[i].IP === remIP && this.UDPoutputs[i].port === remPort) {
-        // and remove
-        this.UDPoutputs.splice(i, 1)
-        console.log('Removed UDP Output ' + remIP + ':' + remPort)
+      const output = this.UDPoutputs[i]
+      const existingProtocol = output.protocol || 'udp'
+      const existingMode = output.mode || 'client'
 
-        // restart mavlink-router, if link active
+      let matches = false
+      if (existingProtocol === protocol && existingMode === mode) {
+        if (mode === 'server' && output.port === remPort) {
+          matches = true
+        } else if (mode === 'client' && output.IP === remIP && output.port === remPort) {
+          matches = true
+        }
+      }
+
+      if (matches) {
+        this.UDPoutputs.splice(i, 1)
+        console.log(`Removed ${protocol.toUpperCase()} ${mode} output: ${mode === 'client' ? remIP + ':' : 'port '}${remPort}`)
+
+        // Restart mavlink-router if link is active
         if (this.m) {
           this.closeLink(() => {
             this.startLink((err) => {
@@ -225,7 +261,7 @@ class FCDetails {
           })
         }
 
-        // try to save. Will be invalid if running under test runner
+        // Save settings
         try {
           this.saveSerialSettings()
         } catch (e) {
@@ -239,6 +275,37 @@ class FCDetails {
     return this.getUDPOutputs()
   }
 
+  removeUDPOutput (remIP, remPort) {
+    // Legacy method - calls the new removeOutput method
+    return this.removeOutput('udp', 'client', remIP, remPort)
+  }
+
+  updateRouterSettings (enableHeartbeat, enableDSRequest) {
+    // Update router settings (Heartbeat and Datastream Request)
+    this.enableHeartbeat = enableHeartbeat
+    this.enableDSRequest = enableDSRequest
+
+    console.log(`Updated router settings - Heartbeat: ${enableHeartbeat}, DS Request: ${enableDSRequest}`)
+
+    // Save settings
+    try {
+      this.saveSerialSettings()
+    } catch (e) {
+      console.log(e)
+    }
+
+    // Restart mavlink-router if link is active to apply new settings
+    if (this.m) {
+      this.closeLink(() => {
+        this.startLink((err) => {
+          if (err) {
+            console.log(err)
+          }
+        })
+      })
+    }
+  }
+
   getSystemStatus () {
     // get the system status
     if (this.m !== null) {
@@ -249,7 +316,10 @@ class FCDetails {
         conStatus: this.m.conStatusStr(),
         statusText: this.m.statusText,
         byteRate: this.m.statusBytesPerSec.avgBytesSec,
-        fcVersion: this.m.fcVersion
+        fcVersion: this.m.fcVersion,
+        sysid: this.m.targetSystem,
+        enableHeartbeat: this.enableHeartbeat,
+        enableDSRequest: this.enableDSRequest
       }
     } else {
       return {
@@ -259,7 +329,10 @@ class FCDetails {
         conStatus: 'Not connected',
         statusText: '',
         byteRate: 0,
-        fcVersion: ''
+        fcVersion: '',
+        sysid: null,
+        enableHeartbeat: this.enableHeartbeat,
+        enableDSRequest: this.enableDSRequest
       }
     }
   }
@@ -346,32 +419,83 @@ class FCDetails {
     } else {
       console.log('Opening UART Link ' + this.activeDevice.serial + ' @ ' + this.activeDevice.baud + ', MAV v' + this.activeDevice.mavversion)
     }
-    // this.outputs.push({ IP: newIP, port: newPort })
+
+    // Generate mavlink-router config file with filters
+    const MAVLinkRouterConfigGenerator = require('./mavlinkRouter.js')
+    const configGen = new MAVLinkRouterConfigGenerator(this.settings)
+    let configPath
+    try {
+      configPath = configGen.writeConfig()
+      console.log(`Generated mavlink-router config: ${configPath}`)
+    } catch (err) {
+      console.error('Failed to generate mavlink-router config:', err)
+      // Fall back to command-line approach
+      configPath = null
+    }
 
     // build up the commandline for mavlink-router
-    const cmd = ['-e', '127.0.0.1:14540', '-e', '127.0.0.1:14541', '--tcp-port']
-    if (this.enableTCP === true) {
-      cmd.push('5760')
+    let cmd
+    if (configPath) {
+      // Use config file approach (supports filtering)
+      cmd = ['--conf-file', configPath]
     } else {
-      cmd.push('0')
-    }
+      // Fall back to command-line approach (legacy, no filtering)
+      cmd = ['-e', '127.0.0.1:14540', '-e', '127.0.0.1:14541', '--tcp-port']
+      if (this.enableTCP === true) {
+        cmd.push('5760')
+      } else {
+        cmd.push('0')
+      }
+
+    // Add outputs with protocol/mode support
     for (let i = 0, len = this.UDPoutputs.length; i < len; i++) {
-      cmd.push('-e')
-      cmd.push(this.UDPoutputs[i].IP + ':' + this.UDPoutputs[i].port)
+      const output = this.UDPoutputs[i]
+      const protocol = output.protocol || 'udp'
+      const mode = output.mode || 'client'
+
+      if (protocol === 'udp' && mode === 'client') {
+        // UDP Client: -e IP:PORT
+        cmd.push('-e')
+        cmd.push(output.IP + ':' + output.port)
+      } else if (protocol === 'udp' && mode === 'server') {
+        // UDP Server: 0.0.0.0:PORT (listening mode)
+        cmd.push('0.0.0.0:' + output.port)
+      } else if (protocol === 'tcp' && mode === 'client') {
+        // TCP Client: -t IP:PORT
+        cmd.push('-t')
+        cmd.push(output.IP + ':' + output.port)
+      } else if (protocol === 'tcp' && mode === 'server') {
+        // TCP Server: --tcp-port PORT (additional TCP server)
+        // Note: mavlink-router supports multiple TCP servers
+        cmd.push('-e')
+        cmd.push('tcp:0.0.0.0:' + output.port)
+      }
     }
+
+    // Add Heartbeat option
+    if (this.enableHeartbeat === true) {
+      cmd.push('--heartbeat')
+    }
+
+    // Add Datastream Request option
+    if (this.enableDSRequest === true) {
+      cmd.push('--datastream-request')
+    }
+
     //cmd.push('--log')
     //cmd.push(logpaths.flightsLogsDir)
     //if (this.doLogging === true) {
     //  cmd.push('--telemetry-log')
     //}
-    if (this.enableUDPB === true) {
-      cmd.push('0.0.0.0:' + this.UDPBPort)
-    }
-    if (this.activeDevice.inputType === 'UART') {
-      const serialPath = getSerialPathFromValue(this.activeDevice.serial, this.serialDevices)
-      cmd.push(serialPath + ':' + this.activeDevice.baud)
-    } else if (this.activeDevice.inputType === 'UDP') {
-      cmd.push('0.0.0.0:' + this.activeDevice.udpInputPort)
+      if (this.enableUDPB === true) {
+        cmd.push('0.0.0.0:' + this.UDPBPort)
+      }
+      if (this.activeDevice.inputType === 'UART') {
+        const serialPath = getSerialPathFromValue(this.activeDevice.serial, this.serialDevices)
+        cmd.push(serialPath + ':' + this.activeDevice.baud)
+      } else if (this.activeDevice.inputType === 'UDP') {
+        cmd.push('0.0.0.0:' + this.activeDevice.udpInputPort)
+      }
     }
     console.log(cmd)
 
@@ -636,6 +760,36 @@ class FCDetails {
     } catch (e) {
       console.log(e)
     }
+  }
+
+  restartWithFilterUpdate () {
+    // Restart mavlink-router with updated filter configuration
+    console.log('Restarting mavlink-router with updated filter configuration...')
+
+    if (!this.active) {
+      console.log('Link not active, skipping restart')
+      return
+    }
+
+    // Close the current link
+    this.closeLink((err) => {
+      if (err) {
+        console.error('Error closing link during filter update:', err)
+        return
+      }
+
+      // Wait a moment for the router to fully close
+      setTimeout(() => {
+        // Restart the link with new configuration
+        this.startLink((err, success) => {
+          if (err) {
+            console.error('Error restarting link with filter update:', err)
+          } else {
+            console.log('Successfully restarted mavlink-router with updated filters')
+          }
+        })
+      }, 500)
+    })
   }
 }
 
