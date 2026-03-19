@@ -11,6 +11,33 @@ const REGISTRY = {
   ...ardupilotmega.REGISTRY
 }
 
+const RTCM3_PREAMBLE = 0xD3
+const GPS_RTCM_MAX_MESSAGE = 4 * 180
+
+const splitRtcm3Frames = (input) => {
+  const frames = []
+  const buf = Buffer.from(input || [])
+  let i = 0
+
+  while (i + 6 <= buf.length) {
+    if (buf[i] !== RTCM3_PREAMBLE) {
+      i += 1
+      continue
+    }
+
+    const payloadLen = ((buf[i + 1] & 0x03) << 8) | buf[i + 2]
+    const frameLen = 3 + payloadLen + 3 // header + payload + CRC24Q
+    if (i + frameLen > buf.length) {
+      break
+    }
+
+    frames.push(buf.slice(i, i + frameLen))
+    i += frameLen
+  }
+
+  return frames
+}
+
 class mavManager {
   constructor (version, inudpIP, inudpPort, enableDSRequest) {
     this.mav = null
@@ -339,43 +366,50 @@ class mavManager {
   }
 
   sendRTCMMessage (gpmessage, seq) {
-    // create a rtcm message for the flight controller
-    let flags = 0
-    if (gpmessage.length > 180) {
-      flags = 1
-    }
-    // add in the sequence number
-    flags |= (seq & 0x1F) << 3
+    const sendOneRtcmFrame = (rtcmFrame, frameSeq) => {
+      if (!rtcmFrame || rtcmFrame.length === 0) {
+        return
+      }
+      if (rtcmFrame.length > GPS_RTCM_MAX_MESSAGE) {
+        // MAVLink GPS_RTCM_DATA supports at most 4 fragments (4 * 180 bytes).
+        console.log(`RTCM frame too large for GPS_RTCM_DATA: ${rtcmFrame.length} bytes`)
+        return
+      }
 
-    if (gpmessage.length > 4 * 180) {
-      // can't send this with GPS_RTCM_DATA
-      return
-    }
-    // send data in 180 byte parts
-    let buf = Buffer.from(gpmessage)
-    const msgset = []
-    const maxBytes = 180
-    while (buf.length > maxBytes) {
-      //if (buf.length > maxBytes) {
-        // slice
+      let flags = 0
+      if (rtcmFrame.length > 180) {
+        flags = 1
+      }
+      flags |= (frameSeq & 0x1F) << 3
+
+      let buf = Buffer.from(rtcmFrame)
+      const msgset = []
+      const maxBytes = 180
+      while (buf.length > maxBytes) {
         msgset.push(buf.slice(0, maxBytes))
         buf = buf.slice(maxBytes)
-      //} else {
-        // need to pad to 180 chars? No, message packing
-        // will do this for us
-      //  msgset.push(buf)
-      //  break
-      //}
-    }
-    msgset.push(buf)
+      }
+      msgset.push(buf)
 
-    for (let i = 0, len = msgset.length; i < len; i++) {
-      const msg = new common.GpsRtcmData()
-      msg.flags = flags | (i << 1)
-      msg.len = msgset[i].length
-      msg.data = msgset[i]
-      this.sendData(msg)
+      for (let i = 0, len = msgset.length; i < len; i++) {
+        const msg = new common.GpsRtcmData()
+        msg.flags = flags | (i << 1)
+        msg.len = msgset[i].length
+        msg.data = msgset[i]
+        this.sendData(msg)
+      }
     }
+
+    const frames = splitRtcm3Frames(gpmessage)
+    if (frames.length > 0) {
+      frames.forEach((frame, idx) => {
+        sendOneRtcmFrame(frame, (seq + idx) & 0x1F)
+      })
+      return
+    }
+
+    // Fallback for non-RTCM-framed payloads.
+    sendOneRtcmFrame(Buffer.from(gpmessage), seq & 0x1F)
   }
 
   autopilotFromID () {

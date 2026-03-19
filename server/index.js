@@ -694,10 +694,10 @@ app.post('/api/vpnwireguardelete', authenticateToken, [check('network').not().is
 
 // Serve the ntrip info
 app.get('/api/ntripconfig', authenticateToken, (req, res) => {
-  ntripClient.getSettings((host, port, mountpoint, username, password, active, useTLS) => {
+  ntripClient.getSettings((host, port, mountpoint, username, password, active, useTLS, ggaInterval, preset, presets) => {
     res.setHeader('Content-Type', 'application/json')
     // console.log(JSON.stringify({host: host,  port: port, mountpoint: mountpoint, username: username, password: password}))
-    res.send({ host, port, mountpoint, username, password, active, useTLS })
+    res.send({ host, port, mountpoint, username, password, active, useTLS, ggaInterval, preset, presets })
   })
 })
 
@@ -809,7 +809,9 @@ app.post('/api/ntripmodify', authenticateToken, [check('active').isBoolean(),
   check('mountpoint').isLength({ min: 1 }),
   check('username').isLength({ min: 5 }),
   check('password').isLength({ min: 5 }),
-  check('useTLS').isBoolean()], function (req, res) {
+  check('preset').optional().isString(),
+  check('useTLS').isBoolean(),
+  check('ggaInterval').isInt({ min: 1, max: 60 })], function (req, res) {
   // User wants to start/stop NTRIP
   const errors = validationResult(req)
   if (!errors.isEmpty()) {
@@ -818,11 +820,11 @@ app.post('/api/ntripmodify', authenticateToken, [check('active').isBoolean(),
   }
 
   ntripClient.setSettings(JSON.parse(req.body.host), req.body.port, JSON.parse(req.body.mountpoint), JSON.parse(req.body.username),
-                          JSON.parse(req.body.password), req.body.active, req.body.useTLS)
-  ntripClient.getSettings((host, port, mountpoint, username, password, active, useTLS) => {
+                          JSON.parse(req.body.password), req.body.active, req.body.useTLS, req.body.ggaInterval, req.body.preset)
+  ntripClient.getSettings((host, port, mountpoint, username, password, active, useTLS, ggaInterval, preset, presets) => {
     res.setHeader('Content-Type', 'application/json')
     // console.log(JSON.stringify({host: host,  port: port, mountpoint: mountpoint, username: username, password: password}))
-    res.send(JSON.stringify({ host, port, mountpoint, username, password, active, useTLS }))
+    res.send(JSON.stringify({ host, port, mountpoint, username, password, active, useTLS, ggaInterval, preset, presets }))
   })
 })
 
@@ -1554,4 +1556,3 @@ if (require.main === module) {
     console.log('Press Ctrl+C to stop');
   });
 }
-

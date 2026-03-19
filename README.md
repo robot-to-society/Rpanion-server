@@ -51,6 +51,18 @@ Rpanion-server allows the user to configure:
 - NTRIP Streaming
 - Logging (tlog and bin logs)
 
+### NTRIP Configuration
+
+The NTRIP client streams GPS correction data from an NTRIP server to the flight controller for RTK positioning.
+
+**GGA Transmission Interval:**
+- Configure the interval for sending GGA position messages to the NTRIP server
+- Default: 60 seconds
+- Range: 1-60 seconds (configurable in 1-second increments)
+- Adjustable via web interface under NTRIP Configuration page
+
+Some RTK services require specific GGA transmission intervals for optimal performance. The interval can be adjusted to match your NTRIP provider's requirements.
+
 ## Installing
 
 Rpanion-server has pre-built debian packges for arm64 platforms (Jetson, Raspberry Pi, etc). This

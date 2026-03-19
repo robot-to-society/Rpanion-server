@@ -15,6 +15,15 @@ class adhocManager {
 
     // if Ahoc mode is supposed to be active, then activate it. As OS won't save settings between reboots
     if (this.device !== null) {
+      if (!this.validSavedSettings(this.devicesettings)) {
+        console.log('Invalid saved adhoc settings. Resetting saved adhoc state')
+        this.settings.setValue('adhoc.devicesettings', null)
+        this.settings.setValue('adhoc.device', null)
+        this.devicesettings = null
+        this.device = null
+        return
+      }
+
       // this.setAdapter(true, this.device, this.devicesettings, null)
       this.setAdapter(true, this.device, this.devicesettings, (err) => {
         if (!err) {
@@ -24,6 +33,21 @@ class adhocManager {
         }
       })
     }
+  }
+
+  validSavedSettings (settings) {
+    if (!settings || typeof settings !== 'object') {
+      return false
+    }
+
+    const hasString = (value) => (typeof value === 'string' && value.length > 0)
+    const channel = Number(settings.channel)
+
+    return hasString(settings.ssid) &&
+      hasString(settings.ipaddress) &&
+      Number.isInteger(channel) &&
+      channel > 0 &&
+      (settings.wpaType === 'none' || settings.wpaType === 'wep')
   }
 
   getAdapters (callback) {
@@ -135,6 +159,13 @@ class adhocManager {
 
   setAdapter (toState, device, settings, callback) {
     // active or deactivate an ad-hoc connection
+    if (toState && !this.validSavedSettings(settings)) {
+      if (callback) {
+        return callback(new Error('Invalid adhoc settings'))
+      }
+      return
+    }
+
     this.settings.setValue('adhoc.devicesettings', settings)
     this.settings.setValue('adhoc.device', toState ? device : null)
     if (toState) {
