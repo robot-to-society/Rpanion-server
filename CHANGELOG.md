@@ -1,4 +1,24 @@
 ### Changelog
+#### [v0.12.1](https://github.com/stephendade/Rpanion-server/compare/v0.12.0...v0.12.1)
+ - NTRIP: Fix NTRIPv2 compliance
+ - Build: Upgrade to Node.js 24
+ - Build: Move to using Python virtualenv
+ - Deploy: Download mavlink-router binary
+ - Deploy: Simplify Node.js installation
+ - Deploy: Move Node.js install to common libraries
+ - CI: Upversion Node.js and Ubuntu in CI workflows
+ - Video: Check packet type first for camera requests
+ - Server: Correct permissions for reading network clients
+ - Dependencies: Bump react-router and react-router-dom
+ - Dependencies: Bump qs from 6.14.0 to 6.14.1
+ - Dependencies: Bump systeminformation from 5.27.11 to 5.27.14
+ - Dependencies: Bump GitHub Actions group
+ - README: Update screenshots to v0.12.0
+ - README: Add install clarifications
+ - CI: Add Claude Code Review workflow
+ - CI: Add Claude PR Assistant workflow
+ - CI: Update issue templates
+
 #### [v0.12.0](https://github.com/stephendade/Rpanion-server/compare/v0.11.4...v0.12.0)
  - Flight Controller: Add UDP (network) support
  - PPP: Add PPP link management to flight controller
@@ -14,6 +34,7 @@
  - Video: Fix cameras not being enabled on boot
  - VPN: Fix Wireguard and Zerotier permissions
  - Logging: Use purpose-built dflogger instead of mavlink-router for logging
+ - NTRIP: Add configurable GGA transmission interval (1-60 seconds, default 60)
 
 #### [v0.11.4](https://github.com/stephendade/Rpanion-server/compare/v0.11.0...v0.11.4)
  - Migrate to using debian packages for release

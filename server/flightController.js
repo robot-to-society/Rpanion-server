@@ -89,6 +89,18 @@ class FCDetails {
     this.doLogging = this.settings.value('flightcontroller.doLogging', false)
     this.active = this.settings.value('flightcontroller.active', false)
 
+    if (!Array.isArray(this.UDPoutputs)) {
+      console.log('Invalid saved flightcontroller.outputs type. Resetting to empty list')
+      this.UDPoutputs = []
+    }
+
+    if (this.active && !this.validSavedActiveDevice(this.activeDevice)) {
+      console.log('Invalid saved flightcontroller.activeDevice. Disabling telemetry auto-start')
+      this.activeDevice = null
+      this.active = false
+      this.saveSerialSettings()
+    }
+
     if (this.active) {
       // restart link if saved serial device is found
       this.getDeviceSettings((err, devices) => {
@@ -122,9 +134,37 @@ class FCDetails {
             }
             this.startInterval()
           })
+        } else {
+          console.log('Unknown saved inputType. Resetting link')
+          this.activeDevice = null
+          this.active = false
         }
       })
     }
+  }
+
+  validSavedActiveDevice (device) {
+    if (!device || typeof device !== 'object') {
+      return false
+    }
+
+    if (device.inputType === 'UART') {
+      const baud = Number(device.baud)
+      const mavversion = Number(device.mavversion)
+      return typeof device.serial === 'string' && device.serial.length > 0 &&
+        Number.isInteger(baud) && baud > 0 &&
+        Number.isInteger(mavversion) && (mavversion === 1 || mavversion === 2)
+    }
+
+    if (device.inputType === 'UDP') {
+      const udpInputPort = Number(device.udpInputPort)
+      const mavversion = Number(device.mavversion)
+      return Number.isInteger(udpInputPort) &&
+        udpInputPort > 0 && udpInputPort <= 65535 &&
+        Number.isInteger(mavversion) && (mavversion === 1 || mavversion === 2)
+    }
+
+    return false
   }
 
   validMavlinkRouter () {
